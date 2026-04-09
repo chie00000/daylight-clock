@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日の長さを感じる手帳</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #d8d3c8;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 16px;
+}
+
+.page {
+  background: #fafaf0;
+  width: 100%;
+  max-width: 700px;
+  padding: 28px 28px 24px 36px;
+  box-shadow: 2px 4px 24px rgba(0,0,0,0.18), -1px 0 8px rgba(0,0,0,0.07);
+  position: relative;
+  font-family: 'Shippori Mincho', serif;
+  align-self: flex-start;
+}
+.page::before {
+  content:''; position:absolute;
+  left:22px; top:0; bottom:0; width:1px;
+  background:rgba(160,120,80,0.25);
+}
+
+.page-header {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  margin-bottom:18px; padding-bottom:8px;
+  border-bottom:1px solid rgba(0,0,0,0.1);
+}
+.month-num {
+  font-family:'Cormorant Garamond',serif;
+  font-size:38px; font-weight:300; color:#3a5a8a; line-height:1;
+}
+.month-en {
+  font-family:'Cormorant Garamond',serif; font-style:italic;
+  font-size:11px; color:#6a8aaa; letter-spacing:.1em; margin-top:2px;
+}
+.year-small { font-size:9px; color:#bbb; letter-spacing:.15em; margin-top:3px; }
+.now-clock { text-align:right; }
+.now-time-big {
+  font-family:'Cormorant Garamond',serif;
+  font-size:34px; font-weight:300; color:#1e1a10; letter-spacing:.04em; line-height:1;
+}
+.now-meta { font-size:9px; color:#999; letter-spacing:.15em; margin-top:3px; }
+
+.grid { display:flex; }
+
+.time-col { width:28px; flex-shrink:0; padding-top:22px; }
+.t-label {
+  display:flex; align-items:flex-start; padding-top:1px;
+  font-family:'Cormorant Garamond',serif; font-size:7.5px;
+  justify-content:flex-end; padding-right:5px;
+}
+
+#daysContainer { display:flex; flex:1; }
+
+.day-col { flex:1; border-left:1px solid rgba(0,0,0,0.06); }
+.day-col:first-child { border-left:none; }
+
+.day-header {
+  height:22px; display:flex; align-items:center; gap:4px;
+  padding:0 4px; border-bottom:1px solid rgba(0,0,0,0.1);
+}
+.day-num {
+  font-family:'Cormorant Garamond',serif;
+  font-size:16px; font-weight:300; color:#1e1a10; line-height:1;
+}
+.day-name {
+  font-family:'Cormorant Garamond',serif; font-style:italic;
+  font-size:8px; color:#bbb;
+}
+.day-col.today .day-num   { color:#3a5a8a; }
+.day-col.sunday .day-num  { color:#9a3030; }
+.day-col.saturday .day-num{ color:#305090; }
+
+.slots { position:relative; }
+
+.slot {
+  border-bottom:1px solid rgba(0,0,0,0.055);
+}
+
+.now-marker {
+  position:absolute; left:0; right:0; height:1.5px;
+  background:#1e1a10; z-index:10; pointer-events:none;
+}
+.now-marker::before {
+  content:''; position:absolute;
+  left:-2px; top:-2.5px; width:6px; height:6px;
+  border-radius:50%; background:#1e1a10;
+}
+
+.sun-label {
+  position:absolute; left:2px;
+  font-size:6.5px; font-family:'Cormorant Garamond',serif; font-style:italic;
+  color:rgba(90,60,0,0.6); white-space:nowrap; z-index:5; pointer-events:none;
+}
+
+.page-footer {
+  margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,0,0,0.08);
+  display:flex; justify-content:space-between;
+  font-size:8px; color:#aaa; letter-spacing:.12em;
+}
+.daylight-info {
+  font-family:'Cormorant Garamond',serif; font-size:10px; color:#6a5030;
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="month-num"  id="hdrMonth">—</div>
+      <div class="month-en"   id="hdrMonthEn">———</div>
+      <div class="year-small" id="hdrYear">20XX</div>
+    </div>
+    <div class="now-clock">
+      <div class="now-time-big" id="nowTimeBig">--:--</div>
+      <div class="now-meta">愛知県名古屋市</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="time-col" id="timeCol"></div>
+    <div id="daysContainer"></div>
+  </div>
+
+  <div class="page-footer">
+    <div>日の出 <span id="srDisp">--:--</span>　日の入 <span id="ssDisp">--:--</span></div>
+    <div class="daylight-info" id="dlDisp">——</div>
+  </div>
+</div>
+
+<script>
+const LAT = 35.1815, LON = 136.9066;
+const MONTHS_EN = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December'];
+const DAYS_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const HOURS_START = 4, HOURS_END = 24;
+const SLOT_H = 15;
+
+// ── 正しい日の出・日の入り計算（JST） ──────────────
+function calcSun(date) {
+  const rad = Math.PI/180, deg = 180/Math.PI;
+  const y = date.getFullYear(), mo = date.getMonth()+1, day = date.getDate();
+
+  // ユリウス日（その日の正午UTC基準）
+  const JD = 367*y
+    - Math.floor(7*(y + Math.floor((mo+9)/12)) / 4)
+    + Math.floor(275*mo/9)
+    + day + 1721013.5;
+
+  const n = JD - 2451545.0;
+
+  // 太陽の黄経
+  const L   = (280.460 + 0.9856474*n) % 360;
+  const g   = (357.528 + 0.9856003*n) * rad;
+  const lam = (L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * rad;
+
+  // 赤緯
+  const eps    = 23.439 * rad;
+  const sinDec = Math.sin(eps) * Math.sin(lam);
+  const dec    = Math.asin(sinDec);
+
+  // 時角
+  const cosH = (Math.sin(-0.8333*rad) - Math.sin(LAT*rad)*Math.sin(dec))
+             / (Math.cos(LAT*rad)*Math.cos(dec));
+  if (cosH < -1 || cosH > 1) return { r: 0, s: 1440 };
+  const H = Math.acos(cosH) * deg; // degrees
+
+  // 均時差（赤経から）
+  const RA  = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam)) * deg;
+  const EoT = (L - RA) / 15; // hours
+
+  // 南中時刻(UTC)
+  const transitUTC = 12 - LON/15 - EoT;
+  const riseUTC    = transitUTC - H/15;
+  const setUTC     = transitUTC + H/15;
+
+  // UTC → JST(+9h) → 分
+  function toMin(utcH) { return (((utcH + 9) * 60) % 1440 + 1440) % 1440; }
+  return { r: toMin(riseUTC), s: toMin(setUTC) };
+}
+
+// ── 空の色（分 → RGB） ───────────────────────────
+function skyRGB(min, R, S) {
+  const keys = [
+    [0,        8,  6, 32],
+    [R-90,    16, 10, 52],
+    [R-45,    75, 28, 82],
+    [R-15,   185, 78, 42],
+    [R,      228,155, 52],
+    [R+30,   165,210,242],
+    [R+90,   108,178,228],
+    [(R+S)/2, 78,150,215],
+    [S-90,    96,165,220],
+    [S-30,   210,172, 60],
+    [S-10,   205,102, 38],
+    [S,      168, 48, 50],
+    [S+25,    75, 18, 65],
+    [S+70,    22,  8, 44],
+    [1440,    8,  6, 32],
+  ];
+  const t = Math.max(0, Math.min(1440, min));
+  for (let i=1; i<keys.length; i++) {
+    if (t <= keys[i][0]) {
+      const [t0,r0,g0,b0] = keys[i-1], [t1,r1,g1,b1] = keys[i];
+      const f = (t-t0)/(t1-t0);
+      const l = (a,b) => Math.round(a+(b-a)*f);
+      return [l(r0,r1), l(g0,g1), l(b0,b1)];
+    }
+  }
+  return [8,6,32];
+}
+
+// Canvas でグラデーション描画
+function paintColumn(canvas, sun, totalPx) {
+  const W = canvas.offsetWidth || 40;
+  canvas.width = W; canvas.height = totalPx;
+  const ctx = canvas.getContext('2d');
+  const totalMin = (HOURS_END - HOURS_START) * 60;
+  for (let y=0; y<totalPx; y++) {
+    const min = HOURS_START*60 + (y/totalPx)*totalMin;
+    const [r,g,b] = skyRGB(min, sun.r, sun.s);
+    ctx.fillStyle = `rgba(${r},${g},${b},0.20)`;
+    ctx.fillRect(0, y, W, 1);
+  }
+}
+
+function fmt2(n){ return String(n).padStart(2,'0'); }
+function mmHH(m){ return `${fmt2(Math.floor(m/60)%24)}:${fmt2(Math.floor(m%60))}`; }
+
+let lastKey = '';
+
+function build(today) {
+  document.getElementById('hdrMonth').textContent   = today.getMonth()+1;
+  document.getElementById('hdrMonthEn').textContent = MONTHS_EN[today.getMonth()];
+  document.getElementById('hdrYear').textContent    = today.getFullYear();
+
+  // 時間ラベル
+  const tCol = document.getElementById('timeCol');
+  tCol.innerHTML = '';
+  for (let h=HOURS_START; h<HOURS_END; h++) {
+    const d = document.createElement('div');
+    d.className = 't-label';
+    d.style.height = SLOT_H + 'px';
+    d.style.color  = h%3===0 ? '#888' : 'transparent';
+    d.textContent  = h%3===0 ? h : '';
+    tCol.appendChild(d);
+  }
+
+  // 曜日列
+  const container = document.getElementById('daysContainer');
+  container.innerHTML = '';
+  const dow = today.getDay();
+  const mon = new Date(today);
+  mon.setDate(today.getDate() - (dow===0 ? 6 : dow-1));
+
+  for (let di=0; di<7; di++) {
+    const d = new Date(mon);
+    d.setDate(mon.getDate()+di);
+    const isSun   = d.getDay()===0, isSat = d.getDay()===6;
+    const isToday = d.toDateString()===today.toDateString();
+    const sun     = calcSun(d);
+
+    const col = document.createElement('div');
+    col.className = 'day-col'+(isToday?' today':'')+(isSun?' sunday':'')+(isSat?' saturday':'');
+
+    const hdr = document.createElement('div');
+    hdr.className = 'day-header';
+    hdr.innerHTML = `<span class="day-num">${d.getDate()}</span><span class="day-name">${DAYS_EN[d.getDay()]}</span>`;
+    col.appendChild(hdr);
+
+    const slots = document.createElement('div');
+    slots.className = 'slots';
+    const totalPx = SLOT_H * (HOURS_END - HOURS_START);
+    slots.style.height = totalPx + 'px';
+
+    // Canvas背景
+    const cv = document.createElement('canvas');
+    cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+    cv.height = totalPx;
+    slots.appendChild(cv);
+
+    // 罫線
+    for (let h=HOURS_START; h<HOURS_END; h++) {
+      const line = document.createElement('div');
+      line.style.cssText = `position:absolute;left:0;right:0;height:1px;background:rgba(0,0,0,0.06);top:${(h-HOURS_START)*SLOT_H}px;`;
+      slots.appendChild(line);
+    }
+
+    // 今日：日の出・日の入りライン＋現在時刻マーカー
+    if (isToday) {
+      [{min:sun.r, lbl:`☀ ${mmHH(sun.r)}`}, {min:sun.s, lbl:`☽ ${mmHH(sun.s)}`}]
+      .forEach(({min, lbl}) => {
+        if (min < HOURS_START*60 || min >= HOURS_END*60) return;
+        const y = (min - HOURS_START*60) / 60 * SLOT_H;
+        const sl = document.createElement('div');
+        sl.style.cssText = `position:absolute;left:0;right:0;height:1px;background:rgba(120,80,10,0.4);top:${y}px;z-index:4;`;
+        slots.appendChild(sl);
+        const lb = document.createElement('div');
+        lb.className = 'sun-label';
+        lb.style.top = (y+1)+'px';
+        lb.textContent = lbl;
+        slots.appendChild(lb);
+      });
+
+      const mk = document.createElement('div');
+      mk.className = 'now-marker'; mk.id = 'nowMarker';
+      slots.appendChild(mk);
+    }
+
+    col.appendChild(slots);
+    container.appendChild(col);
+    requestAnimationFrame(() => paintColumn(cv, sun, totalPx));
+  }
+
+  // フッター
+  const sun = calcSun(today);
+  document.getElementById('srDisp').textContent = mmHH(sun.r);
+  document.getElementById('ssDisp').textContent = mmHH(sun.s);
+  const dl = sun.s - sun.r;
+  document.getElementById('dlDisp').textContent = `昼間 ${Math.floor(dl/60)}時間${Math.floor(dl%60)}分`;
+}
+
+function updateMarker(nowMin) {
+  const mk = document.getElementById('nowMarker');
+  if (!mk) return;
+  mk.style.top = ((nowMin - HOURS_START*60) / 60 * SLOT_H) + 'px';
+}
+
+function tick() {
+  const now = new Date();
+  const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  if (key !== lastKey) { lastKey = key; build(now); }
+  document.getElementById('nowTimeBig').textContent = `${fmt2(now.getHours())}:${fmt2(now.getMinutes())}`;
+  updateMarker(now.getHours()*60 + now.getMinutes() + now.getSeconds()/60);
+}
+
+window.addEventListener('load', () => { tick(); setInterval(tick, 1000); });
+</script>
+</body>
+</html>
